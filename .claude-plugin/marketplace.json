@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "issue-team",
+  "description": "Single-plugin marketplace hosting the issue-team skill",
+  "owner": {
+    "name": "Jonas Ross",
+    "email": "jonasrossaa@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "issue-team",
+      "description": "Run a right-sized agent team to implement a GitHub issue and deliver a PR",
+      "category": "development",
+      "source": ".",
+      "homepage": "https://github.com/Jonas-Ross/issue-team"
+    }
+  ]
+}
