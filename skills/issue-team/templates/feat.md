@@ -33,9 +33,17 @@ _Each criterion should be something QA can write a test for. "Returns 404 when r
 
 **Model hint:** `sonnet` — _one-sentence reason._
 
-_Model hint options (guidance, not binding):_
+_Syntax: `<tier>[<effort>]` — tier is `haiku | sonnet | opus`; optional bracket is effort `low | medium | high | xhigh | max`. Examples: `sonnet`, `sonnet[high]`, `opus[xhigh]`. Effort defaults to the harness default when the bracket is omitted._
+
+_Tier options (guidance, not binding):_
 - _`haiku` — clean, contained surface; mechanical glue code; no subtle invariants_
 - _`sonnet` — normal feature work; multiple files; moderate judgment required_
 - _`opus` — novel design; deep domain entanglement; architecture-shifting_
+
+_Effort options (optional; affects reasoning depth and latency):_
+- _`low | medium` — short, scoped tasks; cost-sensitive workloads_
+- _`high` — default for intelligence-sensitive coding (recommended minimum for feature work)_
+- _`xhigh` — best setting for most coding and agentic use cases_
+- _`max` — intelligence-demanding tasks; risk of overthinking_
 
 _Guardrail: if the change touches any of **concurrency, migrations, auth, cryptography, parser edge cases, filesystem race conditions**, the coordinator raises to Sonnet minimum regardless of this hint._

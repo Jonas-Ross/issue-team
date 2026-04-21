@@ -33,7 +33,9 @@ Chores are housekeeping changes with no observable user-facing behaviour (toolin
 
 **Model hint:** `haiku` — _chores are usually mechanical._
 
-_Model hint options:_
+_Syntax: `<tier>[<effort>]` — tier is `haiku | sonnet | opus`; optional bracket is effort `low | medium | high | xhigh | max`. Most chores run fine without an effort bracket; add one if the chore touches non-trivial call-site updates._
+
+_Tier options:_
 - _`haiku` — default for mechanical chores_
 - _`sonnet` — dep bumps with breaking changes that require call-site updates; multi-tool chores_
 - _`opus` — rare_

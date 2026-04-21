@@ -28,10 +28,11 @@ The coordinator lists open issues, asks which to implement, classifies by title 
 ## Contents
 
 - `skills/issue-team/SKILL.md` — orchestration workflow for the coordinator
-- `skills/issue-team/agents/*.md` — role prompts read by coordinator-spawned sub-agents (dev, pm, qa, code-reviewer)
+- `skills/issue-team/agents/code-reviewer.md` — role prompt for the externally-spawned `superpowers:code-reviewer` subagent (feature classification only)
+- `skills/issue-team/reference/*.md` — reference material linked from SKILL.md (worktree setup, pre-flight gates, model guardrails, retrospective)
 - `skills/issue-team/hooks/gate-task-completion.sh` — task-completion gate enforcing review-approved phase
 - `skills/issue-team/templates/*.md` — spec skeletons (feat, fix, refactor, chore, docs)
-- `agents/issue-team-{dev,pm,qa}.md` — Claude Code subagent definitions spawned as `subagent_type: "issue-team-*"`
+- `agents/issue-team-{dev,pm,qa}.md` — Claude Code subagent definitions spawned as `subagent_type: "issue-team-*"`. Each file is the full system prompt; there are no separate playbook pointers.
 
 ## Per-repo overrides
 

@@ -74,60 +74,7 @@ Save the classification — it drives Steps 5, 6, and 7.
 
 ## Step 2.5: Set Up Worktree (skip if `needs_worktree=false`)
 
-If Step 0 set `needs_worktree=true`, create the worktree now and swap into it. Everything after this step runs in the new worktree.
-
-### Pick the worktree parent directory
-
-Use an existing worktree base if one is present; otherwise default to `.worktrees/`:
-
-```bash
-base=
-for d in .claude/worktrees .worktrees worktrees; do
-  if [ -d "$d" ]; then base="$d"; break; fi
-done
-: "${base:=.worktrees}"
-mkdir -p "$base"
-```
-
-If `$base` is `.worktrees` or `worktrees` (project-local, outside `.claude/`), verify it is gitignored before creating the worktree. If not ignored, add it to `.gitignore` and commit before proceeding.
-
-### Derive branch name and worktree path
-
-Map the issue title's conventional-commit prefix to a branch prefix, then slugify the rest.
-
-| Title prefix | Branch prefix |
-|---|---|
-| `feat:` | `feature` |
-| `fix:` | `fix` |
-| `refactor:` | `refactor` |
-| `chore:` | `chore` |
-| `docs:` | `docs` |
-
-```bash
-title_prefix=$(printf '%s' "$title" | sed 's/:.*//')
-case "$title_prefix" in
-  feat)  bp=feature ;;
-  *)     bp="$title_prefix" ;;
-esac
-slug=$(printf '%s' "$title" \
-  | sed 's/^[^:]*: *//' \
-  | tr '[:upper:]' '[:lower:]' \
-  | sed 's/[^a-z0-9]/-/g; s/--*/-/g; s/^-//; s/-$//')
-branch="$bp/$slug"
-wt_path="$base/$bp+$slug"
-```
-
-The `+` separator keeps the worktree directory flat — a literal `/` would nest `$base/feature/<slug>/` and break `git worktree list` tooling that expects one entry per directory.
-
-### Create and enter the worktree
-
-```bash
-git worktree add "$wt_path" -b "$branch"
-```
-
-Then call the `EnterWorktree` tool with `path: <wt_path>`. All subsequent steps (baseline check, team spawn, etc.) run from inside the worktree.
-
-If the project uses Node (`package.json` present), run `npm install` in the new worktree — `node_modules` is not shared across worktrees and the baseline check in Step 3 will fail without it.
+If Step 0 set `needs_worktree=true`, create the worktree and swap into it before continuing. Read `$skill_dir/reference/worktree-setup.md` for branch-name derivation, the flat `+` separator rule, the `.gitignore` check, and the Node `npm install` requirement. All subsequent steps run from inside the worktree.
 
 ## Step 3: Baseline Check
 
@@ -146,43 +93,7 @@ If it fails: report and ask the user whether to proceed or investigate. Hold off
 
 ## Step 3.5: Pre-Flight Gates
 
-Before `TeamCreate`, run three cheap gates against the issue. None auto-aborts — each surfaces a question to the user when it fires. If the user waves it off, proceed.
-
-**Gate A — Acceptance criteria present.**
-
-Inspect the issue body (already fetched in Step 1). A well-formed issue has one of:
-- An `## Acceptance criteria` / `## Acceptance Criteria` section with ≥ 1 checkbox, OR
-- ≥ 3 bullet-list items describing testable outcomes anywhere in the body.
-
-If neither is present, surface to the user:
-
-> The issue doesn't have explicit acceptance criteria. The PM / coordinator will need to write them from the title and body alone. Proceed anyway, or pause for you to edit the issue first?
-
-**Gate B — Conflicting open PRs.**
-
-Pick 1–3 keywords from the issue title (skip the conventional-commit prefix). Run:
-
-```bash
-gh pr list --state open --search "<keyword1> <keyword2>" --json number,title,headRefName --limit 10
-```
-
-If any result has title overlap or touches the same area implied by the issue, surface:
-
-> Open PR(s) may overlap: <list number + title + branch>. Spawning the team could cause merge conflicts. Proceed, or close/finish the other PR first?
-
-**Gate C — Dependencies resolved.**
-
-Scan the issue body and comments for phrases like `depends on #N`, `blocked by #N`, `requires #N`, `after #N`. For each referenced issue/PR number:
-
-```bash
-gh issue view <N> --json state,closedAt 2>/dev/null || gh pr view <N> --json state,mergedAt 2>/dev/null
-```
-
-If any referenced item is still open/unmerged, surface:
-
-> The issue references #N (state: <open/draft>). Proceed anyway (implementation may need placeholder / forward-compat handling), or wait for #N to land first?
-
-On user approval (or absence of triggers), continue to Step 4.
+Before `TeamCreate`, run three cheap gates against the issue: **A** acceptance criteria present, **B** no conflicting open PRs, **C** referenced dependencies resolved. None auto-aborts — each surfaces a question to the user when it fires, and proceeds on approval. Read `$skill_dir/reference/preflight-gates.md` for the exact trigger rules, the `gh` commands to run, and the user-facing phrasing for each gate.
 
 ## Step 4: Create the Team
 
@@ -209,7 +120,6 @@ Agent:
   prompt: |
     Skill dir (resolved by coordinator): <skill_dir>
     Agents dir (resolved by coordinator): <agents_dir>
-    Read and follow $skill_dir/agents/pm.md
 
 Agent:
   subagent_type: "superpowers:code-reviewer"
@@ -224,6 +134,8 @@ Agent:
     Read and follow $skill_dir/agents/code-reviewer.md.
     Wait for a task to be assigned before starting.
 ```
+
+The dev, pm, and qa agents have full system prompts (`agents/issue-team-{dev,pm,qa}.md`) that already contain every rule and decision point. Only `code-reviewer` needs an explicit `Read and follow` line because it reuses the external `superpowers:code-reviewer` subagent type.
 
 **`refactor` / `bugfix` / `chore` / `docs` classification — no agent spawns here.** Coordinator writes the spec inline in Step 6.
 
@@ -302,20 +214,25 @@ PM writes `spec.md` and messages you with the path. Read the file. Approve or se
 
 For refactor/bugfix/chore/docs: skip — you authored the spec.
 
-### 6c. Pick model tier from spec's Model hint (+ guardrails)
+### 6c. Pick model tier and effort from spec's Model hint (+ guardrails)
 
-Read the `Model hint:` line from the approved spec. Default tier = the hint value (`haiku`, `sonnet`, or `opus`).
+Read the `Model hint:` line from the approved spec. The hint syntax is:
 
-**Guardrail — raise to Sonnet minimum if the spec touches any of:**
+```
+Model hint: <tier>[<effort>] — <reason>
+```
 
-- concurrency (threads, async race windows, locks, channels)
-- migrations (schema changes, data backfills, irreversible transformations)
-- auth (authentication, authorization, session, token handling)
-- cryptography (hashing, signing, encryption, key handling)
-- parser edge cases (hand-rolled parsers, tokenizers, escape handling)
-- filesystem race conditions (TOCTOU, concurrent writers, lockfile logic)
+Where `<tier>` is `haiku | sonnet | opus` and `[<effort>]` is an optional bracketed `low | medium | high | xhigh | max` that will be passed to dev and QA at spawn time. Examples:
 
-If the hint is `haiku` but the spec touches any of the above, **upgrade to `sonnet`** and note the override. If the hint is `opus`, the guardrail does not downgrade. Record the tier decision (hint value, final value, override reason if any) — the retro in Step 9 surfaces it.
+- `Model hint: sonnet — normal feature work` (tier only; spawn without explicit effort)
+- `Model hint: sonnet[high] — auth flow, needs careful reasoning` (tier + effort)
+- `Model hint: opus[xhigh] — novel design, long horizon` (max-capability combo)
+
+Parse the tier as the default, and parse the bracket as the effort if present.
+
+**Guardrail — raise to Sonnet minimum if the spec touches concurrency, migrations, auth, cryptography, parser edge cases, or filesystem race conditions.** See `$skill_dir/reference/model-guardrails.md` for the full domain list and the rationale for each. If the hint is `haiku` but the spec touches any of these, upgrade to `sonnet` and note the override. If the hint is `opus`, the guardrail does not downgrade.
+
+Record the tier decision (hint value, final value, override reason if any) — the retro in Step 9 surfaces it.
 
 ### 6d. Spawn dev and QA at chosen tier
 
@@ -327,23 +244,25 @@ Agent:
   team_name: "issue-<number>"
   name: "dev"
   model: "<tier from 6c>"
+  effort: "<effort from 6c, if specified>"
   mode: "auto"
   prompt: |
     Skill dir (resolved by coordinator): <skill_dir>
     Agents dir (resolved by coordinator): <agents_dir>
-    Read and follow $skill_dir/agents/dev.md
 
 Agent:
   subagent_type: "issue-team-qa"
   team_name: "issue-<number>"
   name: "qa"
   model: "<tier from 6c>"
+  effort: "<effort from 6c, if specified>"
   mode: "auto"
   prompt: |
     Skill dir (resolved by coordinator): <skill_dir>
     Agents dir (resolved by coordinator): <agents_dir>
-    Read and follow $skill_dir/agents/qa.md
 ```
+
+Include the `effort:` line only when the spec's `Model hint` specified one in bracket syntax (see 6c). Dev and QA each have full system prompts (`agents/issue-team-{dev,qa}.md`) — they don't need a `Read and follow` line.
 
 ### 6e. Brief the team
 
@@ -511,63 +430,6 @@ Wait for all `shutdown_approved` + `teammate_terminated` notifications, then pro
 
 ## Step 9: Retrospective (before TeamDelete)
 
-After all teammates report `shutdown_approved` and before calling `TeamDelete`, do a short retrospective. This is the only point in the workflow where durable lessons can be captured — once `TeamDelete` runs, task history is gone.
+After all teammates report `shutdown_approved` and before calling `TeamDelete`, run the retrospective defined in `$skill_dir/reference/retrospective.md` — it's the only point in the workflow where durable lessons can be captured, because `TeamDelete` clears the task history.
 
-**9a. Read the run history.**
-
-```
-TaskList
-# for any task that looks informative, read the full record:
-TaskGet taskId: <id>
-```
-
-Also recall the last ~5 messages from each agent. Note any model-tier overrides from Step 6c.
-
-**9b. Self-ask three questions.**
-
-1. What took longer than expected, or cost more tokens than expected? Why?
-2. Where did routing break — any case where a message went to the wrong teammate, or where team-lead had to intervene?
-3. What pattern would help a future run — a missing guardrail, a missed classification, a template field worth adding?
-
-**9c. If (and only if) a durable lesson emerged**, append a feedback memory.
-
-Derive the project slug from the coordinator's environment — don't hardcode. Typically `~/.claude/projects/<slug>/memory/` already exists for the active working directory. Use `ls ~/.claude/projects/` and pick the slug matching the current working directory's normalized path (e.g. `-home-jonas-dev-<repo>` for `/home/jonas/dev/<repo>`). If no project slug exists yet, skip the retro write — do not create a new projects/ directory just for the retro.
-
-Find the next free retro number:
-
-```bash
-ls ~/.claude/projects/<slug>/memory/feedback_issue_team_retro_*.md 2>/dev/null | wc -l
-# N = count + 1
-```
-
-Write the feedback memory at `~/.claude/projects/<slug>/memory/feedback_issue_team_retro_<N>.md`:
-
-```markdown
----
-name: issue-team retro #<N> — <one-line title>
-description: <one-line description — used to decide relevance in future conversations>
-type: feedback
----
-
-<Rule or pattern learned — lead with it>
-
-**Why:** <context / incident that motivated this lesson during the run>
-
-**How to apply:** <when/where in issue-team workflow this guidance kicks in>
-```
-
-Then append a one-line index entry to `~/.claude/projects/<slug>/memory/MEMORY.md`:
-
-```
-- [issue-team retro #<N>](feedback_issue_team_retro_<N>.md) — <one-line hook>
-```
-
-Skip entirely if no durable lesson emerged — don't write a retro just because the hook triggers. A "nothing to report" run is not a failure.
-
-**9d. Finalize.**
-
-```
-TeamDelete
-```
-
-Report the PR URL to the user, plus a one-line retro summary if a memory was written ("Wrote retro #N on <topic>.").
+The retro is short: read run history (`TaskList` + targeted `TaskGet`), self-ask three questions (what cost more than expected, where did routing break, what pattern would help next time), and only write a feedback memory if a durable lesson emerged. After the retro, call `TeamDelete` and report the PR URL to the user, with a one-line retro summary if a memory was written.

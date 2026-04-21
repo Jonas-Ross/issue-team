@@ -38,11 +38,15 @@ A bugfix spec names the bug precisely and defines the fix by the behaviour that 
 - [ ] _Full suite passes including the new regression test_
 - [ ] _`npm run check` passes (or project equivalent)_
 
-**Model hint:** `sonnet` — _bugfixes almost always need real reasoning about the root cause._
+**Model hint:** `sonnet[high]` — _bugfixes almost always need real reasoning about the root cause._
 
-_Model hint options:_
+_Syntax: `<tier>[<effort>]` — tier is `haiku | sonnet | opus`; optional bracket is effort `low | medium | high | xhigh | max`. Examples: `sonnet`, `sonnet[high]`, `opus[xhigh]`._
+
+_Tier options:_
 - _`haiku` — rare; only for trivially scoped, well-understood bugs with single-file impact_
 - _`sonnet` — default; bug diagnosis + fix + regression test_
 - _`opus` — deep architectural bug, fix requires judgment about API / invariants_
+
+_For bugfixes, `[high]` or `[xhigh]` is usually the right effort — root-cause reasoning benefits from extra thinking._
 
 _Guardrail: raise to Sonnet minimum if the bug touches **concurrency, migrations, auth, cryptography, parser edge cases, filesystem race conditions** — these domains punish subtle fixes._

@@ -34,9 +34,13 @@ Refactors change structure without changing observable behaviour. The acceptance
 
 **Model hint:** `haiku` — _clean mechanical refactors benefit from Haiku speed._
 
-_Model hint options:_
+_Syntax: `<tier>[<effort>]` — tier is `haiku | sonnet | opus`; optional bracket is effort `low | medium | high | xhigh | max`. Examples: `haiku`, `sonnet[medium]`, `sonnet[high]`._
+
+_Tier options:_
 - _`haiku` — default for mechanical, contained refactors_
 - _`sonnet` — cross-module refactor, subtle type gymnastics, non-trivial public API reshaping_
 - _`opus` — rare; architecture-level restructure with competing design axes_
+
+_Effort: mechanical refactors do fine at default. For cross-module work add `[medium]` or `[high]`; for type-gymnastics add `[high]`._
 
 _Guardrail: raise to Sonnet minimum if refactor touches **concurrency, migrations, auth, cryptography, parser edge cases, filesystem race conditions** — even Haiku-clean refactors in these areas mis-land subtle invariants._

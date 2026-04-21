@@ -32,7 +32,9 @@ Docs changes modify documentation only. Acceptance tests for docs are typically 
 
 **Model hint:** `haiku` — _docs work is usually straightforward prose under clear constraints._
 
-_Model hint options:_
+_Syntax: `<tier>[<effort>]` — tier is `haiku | sonnet | opus`; optional bracket is effort `low | medium | high | xhigh | max`. Most docs edits run fine without an effort bracket; add `[high]` for docs that synthesize behaviour across modules._
+
+_Tier options:_
 - _`haiku` — default for straightforward docs edits_
 - _`sonnet` — docs that require synthesizing behaviour across multiple modules; design-decision docs; architecture narratives_
 - _`opus` — rare_
