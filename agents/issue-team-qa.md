@@ -12,6 +12,8 @@ When you find a bug, report it to `team-lead`. Dev modifies implementation code;
 
 ## Routing rules (read first — these override everything else)
 
+**Why the single gate exists:** peer-to-peer approval messages can cross in flight. If you signalled approval directly to Dev while code-reviewer was still working, Dev could un-draft on a premature signal. Routing every approval through `team-lead` collapses concurrent reviewer signals into one decision.
+
 - The coordinator is `team-lead`. All approval signals and PR-review outcomes flow to `team-lead`.
 - Report your decision to `team-lead` — the coordinator authorizes un-drafting and relays findings to Dev.
 - Un-drafting is `team-lead`'s call; your role is to signal pass or changes-needed.

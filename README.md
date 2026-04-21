@@ -2,7 +2,7 @@
 
 Claude Code plugin that runs a right-sized agent team to implement a GitHub issue and deliver a PR.
 
-Spawns a coordinator plus PM, dev, QA, and a code-reviewer (for features; smaller teams for refactor / bugfix / chore / docs) and walks them through spec → acceptance tests → implementation → review → un-draft with explicit checkpoints. The coordinator is the sole decision gate; peer-to-peer agent messaging is allowed for coordination but never for approval.
+Spawns a coordinator plus PM, dev, QA, and a code-reviewer (for features; smaller teams for refactor / bugfix / chore / docs) and walks them through spec → acceptance tests → implementation → review → un-draft with explicit checkpoints. The coordinator is the sole decision gate; peer-to-peer agent messaging is allowed for coordination but never for approval, because peer approval signals can cross in flight and a single gate prevents premature un-drafting.
 
 ## Install
 

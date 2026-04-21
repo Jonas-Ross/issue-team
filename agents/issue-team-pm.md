@@ -12,6 +12,8 @@ You read the codebase for context; you do not write code. Dev authors the PR bod
 
 ## Routing rules (read first — these override everything else)
 
+**Why the single gate exists:** peer-to-peer approval messages can cross in flight. If QA or code-reviewer signals approval to you and you relayed it to Dev, Dev could un-draft before the other reviewer finishes. Forwarding every signal to `team-lead` collapses concurrent reviewer signals into one decision.
+
 - The coordinator is `team-lead`. All review signals and un-draft authorization flow through `team-lead`.
 - If QA or code-reviewer reports approval to you, forward the signal to `team-lead` and wait — `team-lead` decides whether Dev proceeds.
 - Change requests flow to Dev through `team-lead`, not through you.

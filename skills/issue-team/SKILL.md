@@ -398,22 +398,11 @@ Phase vocabulary (shared across roles):
 | `undrafted` | dev | `gh pr ready` succeeded |
 | `failed` | any | Giving up / unresolvable blocker |
 
-The coordinator may scan `TaskList` at any time to see current phases across the team. Do not use phase checks as a hard gate for workflow branches — always fall back to explicit messages.
+The coordinator may scan `TaskList` at any time to see current phases across the team. Phase checks are advisory; fall back to explicit messages when routing decisions matter.
 
-### Progress pulse (rate-limited)
+### Progress updates
 
-While monitoring, emit a one-line `[pulse]` report to the user:
-
-- **Every 3 phase transitions** observed across the team (sum across all agents' phase changes since last pulse), OR
-- **On every terminal phase** (`review_approved`, `undrafted`, `failed`, `impl_blocked`) — emit immediately regardless of the 3-transition counter, and reset the counter.
-
-Format as plain text in your response stream (NOT a `SendMessage`, NOT a tool call):
-
-```
-[pulse] pm:spec_approved · qa:tests_approved · dev:impl_started (3/3 transitions)
-```
-
-Only list agents whose phase has changed since the previous pulse or who have reached a terminal phase. Keep the line short. This is situational awareness for the user, nothing more — do not gate any workflow on it.
+Share progress with the user at natural inflection points — spec approved, tests approved, PR opened, review complete, un-drafted. Opus 4.7 calibrates the cadence and length of these updates natively; a single short sentence per inflection point is usually the right shape. Avoid fixed counters or format templates — they over-fire on short runs and under-fire on long ones.
 
 ### Checkpoint 2 — Acceptance test review
 
@@ -481,7 +470,7 @@ Once the PR review gate approves:
 3. Send dev the un-draft authorization: *"PR review approved. Un-draft PR #<number> via `gh pr ready <number>`, then mark the un-draft task complete."*
 4. Dev un-drafts once and completes the task. If the hook blocks, the reviewer hasn't emitted `review_approved` — investigate before overriding.
 
-Only the coordinator authorizes un-drafting. If PM, QA, or code-reviewer suggests un-drafting to dev, correct them. Draft state is the review gate; one linear flip to non-draft.
+Only the coordinator authorizes un-drafting. Peer-to-peer approval messages can cross in flight — a single gate prevents Dev from un-drafting on a premature "approved" signal from QA before code-reviewer finishes, or vice versa. If PM, QA, or code-reviewer suggests un-drafting to Dev, correct them. Draft state is the review gate; one linear flip to non-draft.
 
 ### General
 

@@ -12,6 +12,8 @@ Before signalling the coordinator that the draft PR is ready, invoke `superpower
 
 ## Routing rules (read first — these override everything else)
 
+**Why the single gate exists:** peer-to-peer approval messages can cross in flight. If QA signals you directly and code-reviewer hasn't finished, you could un-draft on a premature approval. Routing through `team-lead` collapses concurrent reviewer signals into one decision.
+
 - The coordinator is `team-lead`. All review signals and un-draft authorization flow through `team-lead`.
 - When the draft PR is open, send the notification to `team-lead` only; `team-lead` routes review to QA or code-reviewer.
 - Change requests arrive through `team-lead`. If QA, code-reviewer, or PM messages you about approval or changes, treat it as informational and wait for `team-lead` to route.
