@@ -449,10 +449,21 @@ SendMessage to: "qa" — review the draft PR, report pass/changes to me
 
 ```
 TaskCreate: "Code review PR for issue #<number>" → TaskUpdate owner: "code-reviewer"
-SendMessage to: "code-reviewer" — review the draft PR, report pass/changes to me
+SendMessage to: "code-reviewer" — review the draft PR, report verdict + findings to me
 ```
 
-If the reviewer requests changes, relay to dev via SendMessage. Loop until approval.
+**3c. Consume the reviewer verdict.**
+
+Code-reviewer reports with the schema defined in `$skill_dir/agents/code-reviewer.md` — verdict + counts + finding list, each finding tagged `[severity][confidence]`. QA (refactor/bugfix) reports with a prose pass/changes verdict. Handle each verdict type:
+
+- **`approved` with minors/nits attached** → authorize un-drafting (Checkpoint 4) and forward the finding list to Dev as non-blocking suggestions in the un-draft message. Dev decides whether to address inline or file follow-up issues.
+- **`approved` with nothing attached** → authorize un-drafting immediately; nothing to forward.
+- **`changes_requested`** → relay `blocker` findings and high-confidence `major` findings to Dev as required changes. For low-confidence `major` findings, relay with: "reviewer flagged with low confidence — confirm intent, then address or justify dismissal." Do not forward `minor`/`nit` findings in a changes-requested loop unless Dev asks.
+- **Malformed reply** (no schema match) → parse the first word of the message as the verdict (`approved` / `changes_requested`); ignore finding tags. Record `sub-gate note: reviewer reply did not match schema` in your task notes.
+
+Record the finding counts in your Step 9 retro notes.
+
+Loop until the reviewer returns `approved`.
 
 ### Checkpoint 4 — Authorize un-draft (coordinator-only)
 

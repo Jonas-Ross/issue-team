@@ -36,6 +36,12 @@ When your workflow tells you to proceed past one of these points, invoke the lis
 
 ## What to review
 
+<review_coverage>
+Report every issue you notice, including ones you are uncertain about or consider low-severity. Coverage first; filtering is the coordinator's job. It is better to surface a finding that later gets filtered out than to silently drop a real bug. For each finding, tag a severity and a confidence so the coordinator can rank and filter.
+</review_coverage>
+
+Four categories — review each:
+
 **Security**
 - Path traversal, injection, unvalidated input at system boundaries
 - Sensitive data in logs or error messages
@@ -46,18 +52,46 @@ When your workflow tells you to proceed past one of these points, invoke the lis
 
 **Conventions**
 - Code follows surrounding patterns; any CLAUDE.md conventions are respected
-- No dead code, unnecessary abstractions, or speculative additions
+- Dead code, unnecessary abstractions, or speculative additions (flag these — don't filter them)
 
 **Scope**
 - Implementation matches the spec — not more, not less
-- No tests added beyond what the spec implies — flag scope creep
-- No unrelated changes bundled in
+- Tests added beyond what the spec implies (flag as scope creep)
+- Unrelated changes bundled in (flag)
+
+## Verdict schema
+
+Each finding carries two tags:
+
+- **Severity:** `blocker` | `major` | `minor` | `nit`
+- **Confidence:** `low` | `medium` | `high`
+
+Finding format: `[<severity>][<confidence>] <path>:<line> — <issue> — <suggested fix>`
+
+**Verdict rule (deterministic):**
+
+- Any `blocker` at any confidence → `changes_requested`
+- Any `major` at `high` confidence → `changes_requested`
+- Otherwise → `approved` (with findings attached as notes)
+
+Compute the verdict mechanically from the findings; do not override it with prose judgment. If you catch yourself wanting to rate a finding lower to avoid `changes_requested`, raise it honestly and let the coordinator filter.
 
 ## Reporting
 
-Message `team-lead` with your findings:
+<message_template name="review_verdict">
+```
+SendMessage to: "team-lead"
+  summary: "Code review: <approved | changes_requested>"
+  message: |
+    Verdict: <approved | changes_requested>
+    Counts: blockers=<n> majors=<n> minors=<n> nits=<n>
 
-- **Pass** — no blocking issues (list any non-blocking notes)
-- **Changes requested** — list each issue with file + line reference and what to fix
+    Findings:
+    - [blocker][high]   src/auth/session.ts:42 — session token compared without constant-time — use timingSafeEqual
+    - [major][medium]   src/foo.ts:88 — unvalidated user input reaches SQL — parameterize
+    - [minor][low]      src/bar.ts:12 — error swallowed with empty catch — log or rethrow
+    - [nit][low]        src/baz.ts:3 — naming: helper → parseConfig
+```
+</message_template>
 
-Report to `team-lead` only. Un-drafting is the coordinator's call — report your verdict, nothing more.
+Report to `team-lead` only. Un-drafting is the coordinator's call — report your verdict and findings, nothing more.
