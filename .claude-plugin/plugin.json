@@ -1,7 +1,7 @@
 {
   "name": "issue-team",
   "description": "Claude Code skill that runs a right-sized agent team to implement a GitHub issue and deliver a PR — coordinator + PM + dev + QA + code-reviewer with explicit review checkpoints",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "Jonas Ross",
     "email": "jonasrossaa@gmail.com"
