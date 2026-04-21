@@ -1,6 +1,6 @@
 # Spec Template — refactor
 
-Copy this template into `${CLAUDE_PROJECT_DIR}/.claude/teams/<team-name>/spec.md` and fill in each section. Delete template-only guidance in italics before finalizing. **Every section is required**.
+Copy this template into `${CLAUDE_PROJECT_DIR}/.claude/teams/<team-name>/spec.md` and fill in each section. Delete template-only guidance in italics before finalizing. Fill every section with concrete content.
 
 Refactors change structure without changing observable behaviour. The acceptance criteria should prove that.
 
@@ -20,7 +20,7 @@ Refactors change structure without changing observable behaviour. The acceptance
 - _Behaviour changes (refactor must not change observable behaviour)_
 - _Incidental cleanup that tempts "while I'm here" edits_
 - _New features, bug fixes, perf tuning_
-- _Dev may NOT add new tests beyond those required to maintain parity_
+- _Dev adds new tests only where needed to maintain parity (e.g., capturing behaviour previously covered by an import-path the refactor removes)_
 
 **Constraints:**
 - _Public API / import paths to preserve_
@@ -34,9 +34,13 @@ Refactors change structure without changing observable behaviour. The acceptance
 
 **Model hint:** `haiku` — _clean mechanical refactors benefit from Haiku speed._
 
-_Model hint options:_
+_Syntax: `<tier>[<effort>]` — tier is `haiku | sonnet | opus`; optional bracket is effort `low | medium | high | xhigh | max`. Examples: `haiku`, `sonnet[medium]`, `sonnet[high]`._
+
+_Tier options:_
 - _`haiku` — default for mechanical, contained refactors_
 - _`sonnet` — cross-module refactor, subtle type gymnastics, non-trivial public API reshaping_
 - _`opus` — rare; architecture-level restructure with competing design axes_
 
-_Guardrail: force Sonnet minimum if refactor touches **concurrency, migrations, auth, cryptography, parser edge cases, filesystem race conditions** — even Haiku-clean refactors in these areas mis-land subtle invariants._
+_Effort: mechanical refactors do fine at default. For cross-module work add `[medium]` or `[high]`; for type-gymnastics add `[high]`._
+
+_Guardrail: raise to Sonnet minimum if refactor touches **concurrency, migrations, auth, cryptography, parser edge cases, filesystem race conditions** — even Haiku-clean refactors in these areas mis-land subtle invariants._

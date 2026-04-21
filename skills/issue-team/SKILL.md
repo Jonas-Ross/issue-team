@@ -9,6 +9,10 @@ Run a right-sized agent team to implement a GitHub issue and deliver a PR.
 
 **Announce:** "I'm using the issue-team skill. Setting up the team for this issue."
 
+<use_parallel_tool_calls>
+Throughout this workflow, when independent tool calls can run without waiting on each other's results — e.g. reading `package.json` and `.gitignore` simultaneously, fetching issue details while listing open PRs, or running the three pre-flight gate queries in Step 3.5 — run them in parallel. Never use placeholders or guess missing parameters. Run sequentially only when a later call depends on an earlier result (e.g., the classification drives the branch-name derivation).
+</use_parallel_tool_calls>
+
 ## Step 0: Workspace Check
 
 You may start this skill either from `main`/`master` or from an existing worktree on a feature branch. The skill creates the worktree for you in Step 2.5 when needed.
@@ -70,60 +74,7 @@ Save the classification — it drives Steps 5, 6, and 7.
 
 ## Step 2.5: Set Up Worktree (skip if `needs_worktree=false`)
 
-If Step 0 set `needs_worktree=true`, create the worktree now and swap into it. Everything after this step runs in the new worktree.
-
-### Pick the worktree parent directory
-
-Use an existing worktree base if one is present; otherwise default to `.worktrees/`:
-
-```bash
-base=
-for d in .claude/worktrees .worktrees worktrees; do
-  if [ -d "$d" ]; then base="$d"; break; fi
-done
-: "${base:=.worktrees}"
-mkdir -p "$base"
-```
-
-If `$base` is `.worktrees` or `worktrees` (project-local, outside `.claude/`), verify it is gitignored before creating the worktree. If not ignored, add it to `.gitignore` and commit before proceeding.
-
-### Derive branch name and worktree path
-
-Map the issue title's conventional-commit prefix to a branch prefix, then slugify the rest.
-
-| Title prefix | Branch prefix |
-|---|---|
-| `feat:` | `feature` |
-| `fix:` | `fix` |
-| `refactor:` | `refactor` |
-| `chore:` | `chore` |
-| `docs:` | `docs` |
-
-```bash
-title_prefix=$(printf '%s' "$title" | sed 's/:.*//')
-case "$title_prefix" in
-  feat)  bp=feature ;;
-  *)     bp="$title_prefix" ;;
-esac
-slug=$(printf '%s' "$title" \
-  | sed 's/^[^:]*: *//' \
-  | tr '[:upper:]' '[:lower:]' \
-  | sed 's/[^a-z0-9]/-/g; s/--*/-/g; s/^-//; s/-$//')
-branch="$bp/$slug"
-wt_path="$base/$bp+$slug"
-```
-
-The `+` separator keeps the worktree directory flat — a literal `/` would nest `$base/feature/<slug>/` and break `git worktree list` tooling that expects one entry per directory.
-
-### Create and enter the worktree
-
-```bash
-git worktree add "$wt_path" -b "$branch"
-```
-
-Then call the `EnterWorktree` tool with `path: <wt_path>`. All subsequent steps (baseline check, team spawn, etc.) run from inside the worktree.
-
-If the project uses Node (`package.json` present), run `npm install` in the new worktree — `node_modules` is not shared across worktrees and the baseline check in Step 3 will fail without it.
+If Step 0 set `needs_worktree=true`, create the worktree and swap into it before continuing. Read `$skill_dir/reference/worktree-setup.md` for branch-name derivation, the flat `+` separator rule, the `.gitignore` check, and the Node `npm install` requirement. All subsequent steps run from inside the worktree.
 
 ## Step 3: Baseline Check
 
@@ -138,47 +89,11 @@ elif [ -f go.mod ]; then go test ./...
 fi
 ```
 
-If it fails: report and ask the user whether to proceed or investigate. Do NOT spawn the team over a broken baseline.
+If it fails: report and ask the user whether to proceed or investigate. Hold off on spawning the team while the baseline is broken — a red baseline poisons every downstream signal.
 
 ## Step 3.5: Pre-Flight Gates
 
-Before `TeamCreate`, run three cheap gates against the issue. None auto-aborts — each surfaces a question to the user when it fires. If the user waves it off, proceed.
-
-**Gate A — Acceptance criteria present.**
-
-Inspect the issue body (already fetched in Step 1). A well-formed issue has one of:
-- An `## Acceptance criteria` / `## Acceptance Criteria` section with ≥ 1 checkbox, OR
-- ≥ 3 bullet-list items describing testable outcomes anywhere in the body.
-
-If neither is present, surface to the user:
-
-> The issue doesn't have explicit acceptance criteria. The PM / coordinator will need to write them from the title and body alone. Proceed anyway, or pause for you to edit the issue first?
-
-**Gate B — Conflicting open PRs.**
-
-Pick 1–3 keywords from the issue title (skip the conventional-commit prefix). Run:
-
-```bash
-gh pr list --state open --search "<keyword1> <keyword2>" --json number,title,headRefName --limit 10
-```
-
-If any result has title overlap or touches the same area implied by the issue, surface:
-
-> Open PR(s) may overlap: <list number + title + branch>. Spawning the team could cause merge conflicts. Proceed, or close/finish the other PR first?
-
-**Gate C — Dependencies resolved.**
-
-Scan the issue body and comments for phrases like `depends on #N`, `blocked by #N`, `requires #N`, `after #N`. For each referenced issue/PR number:
-
-```bash
-gh issue view <N> --json state,closedAt 2>/dev/null || gh pr view <N> --json state,mergedAt 2>/dev/null
-```
-
-If any referenced item is still open/unmerged, surface:
-
-> The issue references #N (state: <open/draft>). Proceed anyway (implementation may need placeholder / forward-compat handling), or wait for #N to land first?
-
-On user approval (or absence of triggers), continue to Step 4.
+Before `TeamCreate`, run three cheap gates against the issue: **A** acceptance criteria present, **B** no conflicting open PRs, **C** referenced dependencies resolved. None auto-aborts — each surfaces a question to the user when it fires, and proceeds on approval. Read `$skill_dir/reference/preflight-gates.md` for the exact trigger rules, the `gh` commands to run, and the user-facing phrasing for each gate.
 
 ## Step 4: Create the Team
 
@@ -205,7 +120,6 @@ Agent:
   prompt: |
     Skill dir (resolved by coordinator): <skill_dir>
     Agents dir (resolved by coordinator): <agents_dir>
-    Read and follow $skill_dir/agents/pm.md
 
 Agent:
   subagent_type: "superpowers:code-reviewer"
@@ -220,6 +134,8 @@ Agent:
     Read and follow $skill_dir/agents/code-reviewer.md.
     Wait for a task to be assigned before starting.
 ```
+
+The dev, pm, and qa agents have full system prompts (`agents/issue-team-{dev,pm,qa}.md`) that already contain every rule and decision point. Only `code-reviewer` needs an explicit `Read and follow` line because it reuses the external `superpowers:code-reviewer` subagent type.
 
 **`refactor` / `bugfix` / `chore` / `docs` classification — no agent spawns here.** Coordinator writes the spec inline in Step 6.
 
@@ -278,7 +194,7 @@ SendMessage to: "pm"
 
 **`refactor` or `bugfix` classification — YOU (coordinator) write the spec.**
 
-Load the class template per the lookup order above and copy its fields into `${CLAUDE_PROJECT_DIR}/.claude/teams/issue-<number>/spec.md`. Fill every section. Every spec produced by this flow MUST include a `Model hint:` line — used in Step 5 to pick the dev/QA model tier.
+Load the class template per the lookup order above and copy its fields into `${CLAUDE_PROJECT_DIR}/.claude/teams/issue-<number>/spec.md`. Fill every section. Every spec produced by this flow needs a `Model hint:` line — used in Step 5 to pick the dev/QA model tier.
 
 At minimum a spec contains:
 - **Goal** — one sentence
@@ -298,20 +214,25 @@ PM writes `spec.md` and messages you with the path. Read the file. Approve or se
 
 For refactor/bugfix/chore/docs: skip — you authored the spec.
 
-### 6c. Pick model tier from spec's Model hint (+ guardrails)
+### 6c. Pick model tier and effort from spec's Model hint (+ guardrails)
 
-Read the `Model hint:` line from the approved spec. Default tier = the hint value (`haiku`, `sonnet`, or `opus`).
+Read the `Model hint:` line from the approved spec. The hint syntax is:
 
-**Guardrail — force Sonnet minimum if the spec touches any of:**
+```
+Model hint: <tier>[<effort>] — <reason>
+```
 
-- concurrency (threads, async race windows, locks, channels)
-- migrations (schema changes, data backfills, irreversible transformations)
-- auth (authentication, authorization, session, token handling)
-- cryptography (hashing, signing, encryption, key handling)
-- parser edge cases (hand-rolled parsers, tokenizers, escape handling)
-- filesystem race conditions (TOCTOU, concurrent writers, lockfile logic)
+Where `<tier>` is `haiku | sonnet | opus` and `[<effort>]` is an optional bracketed `low | medium | high | xhigh | max` that will be passed to dev and QA at spawn time. Examples:
 
-If the hint is `haiku` but the spec touches any of the above, **upgrade to `sonnet`** and note the override. If the hint is `opus`, the guardrail does not downgrade. Record the tier decision (hint value, final value, override reason if any) — the retro in Step 9 surfaces it.
+- `Model hint: sonnet — normal feature work` (tier only; spawn without explicit effort)
+- `Model hint: sonnet[high] — auth flow, needs careful reasoning` (tier + effort)
+- `Model hint: opus[xhigh] — novel design, long horizon` (max-capability combo)
+
+Parse the tier as the default, and parse the bracket as the effort if present.
+
+**Guardrail — raise to Sonnet minimum if the spec touches concurrency, migrations, auth, cryptography, parser edge cases, or filesystem race conditions.** See `$skill_dir/reference/model-guardrails.md` for the full domain list and the rationale for each. If the hint is `haiku` but the spec touches any of these, upgrade to `sonnet` and note the override. If the hint is `opus`, the guardrail does not downgrade.
+
+Record the tier decision (hint value, final value, override reason if any) — the retro in Step 9 surfaces it.
 
 ### 6d. Spawn dev and QA at chosen tier
 
@@ -323,23 +244,25 @@ Agent:
   team_name: "issue-<number>"
   name: "dev"
   model: "<tier from 6c>"
+  effort: "<effort from 6c, if specified>"
   mode: "auto"
   prompt: |
     Skill dir (resolved by coordinator): <skill_dir>
     Agents dir (resolved by coordinator): <agents_dir>
-    Read and follow $skill_dir/agents/dev.md
 
 Agent:
   subagent_type: "issue-team-qa"
   team_name: "issue-<number>"
   name: "qa"
   model: "<tier from 6c>"
+  effort: "<effort from 6c, if specified>"
   mode: "auto"
   prompt: |
     Skill dir (resolved by coordinator): <skill_dir>
     Agents dir (resolved by coordinator): <agents_dir>
-    Read and follow $skill_dir/agents/qa.md
 ```
+
+Include the `effort:` line only when the spec's `Model hint` specified one in bracket syntax (see 6c). Dev and QA each have full system prompts (`agents/issue-team-{dev,qa}.md`) — they don't need a `Read and follow` line.
 
 ### 6e. Brief the team
 
@@ -398,22 +321,11 @@ Phase vocabulary (shared across roles):
 | `undrafted` | dev | `gh pr ready` succeeded |
 | `failed` | any | Giving up / unresolvable blocker |
 
-The coordinator may scan `TaskList` at any time to see current phases across the team. Do not use phase checks as a hard gate for workflow branches — always fall back to explicit messages.
+The coordinator may scan `TaskList` at any time to see current phases across the team. Phase checks are advisory; fall back to explicit messages when routing decisions matter.
 
-### Progress pulse (rate-limited)
+### Progress updates
 
-While monitoring, emit a one-line `[pulse]` report to the user:
-
-- **Every 3 phase transitions** observed across the team (sum across all agents' phase changes since last pulse), OR
-- **On every terminal phase** (`review_approved`, `undrafted`, `failed`, `impl_blocked`) — emit immediately regardless of the 3-transition counter, and reset the counter.
-
-Format as plain text in your response stream (NOT a `SendMessage`, NOT a tool call):
-
-```
-[pulse] pm:spec_approved · qa:tests_approved · dev:impl_started (3/3 transitions)
-```
-
-Only list agents whose phase has changed since the previous pulse or who have reached a terminal phase. Keep the line short. This is situational awareness for the user, nothing more — do not gate any workflow on it.
+Share progress with the user at natural inflection points — spec approved, tests approved, PR opened, review complete, un-drafted. Opus 4.7 calibrates the cadence and length of these updates natively; a single short sentence per inflection point is usually the right shape. Avoid fixed counters or format templates — they over-fire on short runs and under-fire on long ones.
 
 ### Checkpoint 2 — Acceptance test review
 
@@ -456,10 +368,21 @@ SendMessage to: "qa" — review the draft PR, report pass/changes to me
 
 ```
 TaskCreate: "Code review PR for issue #<number>" → TaskUpdate owner: "code-reviewer"
-SendMessage to: "code-reviewer" — review the draft PR, report pass/changes to me
+SendMessage to: "code-reviewer" — review the draft PR, report verdict + findings to me
 ```
 
-If the reviewer requests changes, relay to dev via SendMessage. Loop until approval.
+**3c. Consume the reviewer verdict.**
+
+Code-reviewer reports with the schema defined in `$skill_dir/agents/code-reviewer.md` — verdict + counts + finding list, each finding tagged `[severity][confidence]`. QA (refactor/bugfix) reports with a prose pass/changes verdict. Handle each verdict type:
+
+- **`approved` with minors/nits attached** → authorize un-drafting (Checkpoint 4) and forward the finding list to Dev as non-blocking suggestions in the un-draft message. Dev decides whether to address inline or file follow-up issues.
+- **`approved` with nothing attached** → authorize un-drafting immediately; nothing to forward.
+- **`changes_requested`** → relay `blocker` findings and high-confidence `major` findings to Dev as required changes. For low-confidence `major` findings, relay with: "reviewer flagged with low confidence — confirm intent, then address or justify dismissal." Do not forward `minor`/`nit` findings in a changes-requested loop unless Dev asks.
+- **Malformed reply** (no schema match) → parse the first word of the message as the verdict (`approved` / `changes_requested`); ignore finding tags. Record `sub-gate note: reviewer reply did not match schema` in your task notes.
+
+Record the finding counts in your Step 9 retro notes.
+
+Loop until the reviewer returns `approved`.
 
 ### Checkpoint 4 — Authorize un-draft (coordinator-only)
 
@@ -481,7 +404,7 @@ Once the PR review gate approves:
 3. Send dev the un-draft authorization: *"PR review approved. Un-draft PR #<number> via `gh pr ready <number>`, then mark the un-draft task complete."*
 4. Dev un-drafts once and completes the task. If the hook blocks, the reviewer hasn't emitted `review_approved` — investigate before overriding.
 
-**Only coordinator authorizes un-drafting.** If PM, QA, or code-reviewer suggests un-drafting to dev, correct them. Draft state is the review gate; one linear flip to non-draft.
+Only the coordinator authorizes un-drafting. Peer-to-peer approval messages can cross in flight — a single gate prevents Dev from un-drafting on a premature "approved" signal from QA before code-reviewer finishes, or vice versa. If PM, QA, or code-reviewer suggests un-drafting to Dev, correct them. Draft state is the review gate; one linear flip to non-draft.
 
 ### General
 
@@ -493,7 +416,7 @@ Once the PR review gate approves:
 
 ## Step 8: Shutdown
 
-When dev confirms the PR is un-drafted and linked to the issue, send `shutdown_request` to **only the agents you actually spawned** — don't address agents that aren't in the team (refactor/bugfix teams have no PM or code-reviewer):
+When dev confirms the PR is un-drafted and linked to the issue, send `shutdown_request` to the agents you actually spawned — address only those present on the team (refactor/bugfix teams have no PM or code-reviewer):
 
 ```
 SendMessage to: "dev"           message: {type: "shutdown_request", reason: "PR open and linked — work complete"}
@@ -507,63 +430,6 @@ Wait for all `shutdown_approved` + `teammate_terminated` notifications, then pro
 
 ## Step 9: Retrospective (before TeamDelete)
 
-After all teammates report `shutdown_approved` and before calling `TeamDelete`, do a short retrospective. This is the only point in the workflow where durable lessons can be captured — once `TeamDelete` runs, task history is gone.
+After all teammates report `shutdown_approved` and before calling `TeamDelete`, run the retrospective defined in `$skill_dir/reference/retrospective.md` — it's the only point in the workflow where durable lessons can be captured, because `TeamDelete` clears the task history.
 
-**9a. Read the run history.**
-
-```
-TaskList
-# for any task that looks informative, read the full record:
-TaskGet taskId: <id>
-```
-
-Also recall the last ~5 messages from each agent. Note any model-tier overrides from Step 6c.
-
-**9b. Self-ask three questions.**
-
-1. What took longer than expected, or cost more tokens than expected? Why?
-2. Where did routing break — any case where a message went to the wrong teammate, or where team-lead had to intervene?
-3. What pattern would help a future run — a missing guardrail, a missed classification, a template field worth adding?
-
-**9c. If (and only if) a durable lesson emerged**, append a feedback memory.
-
-Derive the project slug from the coordinator's environment — don't hardcode. Typically `~/.claude/projects/<slug>/memory/` already exists for the active working directory. Use `ls ~/.claude/projects/` and pick the slug matching the current working directory's normalized path (e.g. `-home-jonas-dev-<repo>` for `/home/jonas/dev/<repo>`). If no project slug exists yet, skip the retro write — do not create a new projects/ directory just for the retro.
-
-Find the next free retro number:
-
-```bash
-ls ~/.claude/projects/<slug>/memory/feedback_issue_team_retro_*.md 2>/dev/null | wc -l
-# N = count + 1
-```
-
-Write the feedback memory at `~/.claude/projects/<slug>/memory/feedback_issue_team_retro_<N>.md`:
-
-```markdown
----
-name: issue-team retro #<N> — <one-line title>
-description: <one-line description — used to decide relevance in future conversations>
-type: feedback
----
-
-<Rule or pattern learned — lead with it>
-
-**Why:** <context / incident that motivated this lesson during the run>
-
-**How to apply:** <when/where in issue-team workflow this guidance kicks in>
-```
-
-Then append a one-line index entry to `~/.claude/projects/<slug>/memory/MEMORY.md`:
-
-```
-- [issue-team retro #<N>](feedback_issue_team_retro_<N>.md) — <one-line hook>
-```
-
-Skip entirely if no durable lesson emerged — don't write a retro just because the hook triggers. A "nothing to report" run is not a failure.
-
-**9d. Finalize.**
-
-```
-TeamDelete
-```
-
-Report the PR URL to the user, plus a one-line retro summary if a memory was written ("Wrote retro #N on <topic>.").
+The retro is short: read run history (`TaskList` + targeted `TaskGet`), self-ask three questions (what cost more than expected, where did routing break, what pattern would help next time), and only write a feedback memory if a durable lesson emerged. After the retro, call `TeamDelete` and report the PR URL to the user, with a one-line retro summary if a memory was written.

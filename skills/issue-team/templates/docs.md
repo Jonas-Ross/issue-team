@@ -1,6 +1,6 @@
 # Spec Template — docs
 
-Copy this template into `${CLAUDE_PROJECT_DIR}/.claude/teams/<team-name>/spec.md` and fill in each section. Delete template-only guidance in italics before finalizing. **Every section is required**.
+Copy this template into `${CLAUDE_PROJECT_DIR}/.claude/teams/<team-name>/spec.md` and fill in each section. Delete template-only guidance in italics before finalizing. Fill every section with concrete content.
 
 Docs changes modify documentation only. Acceptance tests for docs are typically an editorial review rather than a unit test — spell that out explicitly if so.
 
@@ -32,9 +32,11 @@ Docs changes modify documentation only. Acceptance tests for docs are typically 
 
 **Model hint:** `haiku` — _docs work is usually straightforward prose under clear constraints._
 
-_Model hint options:_
+_Syntax: `<tier>[<effort>]` — tier is `haiku | sonnet | opus`; optional bracket is effort `low | medium | high | xhigh | max`. Most docs edits run fine without an effort bracket; add `[high]` for docs that synthesize behaviour across modules._
+
+_Tier options:_
 - _`haiku` — default for straightforward docs edits_
 - _`sonnet` — docs that require synthesizing behaviour across multiple modules; design-decision docs; architecture narratives_
 - _`opus` — rare_
 
-_Guardrail: force Sonnet minimum if the docs change describes **concurrency, migrations, auth, cryptography, parser edge cases, filesystem race conditions** (accurate prose in these domains requires real understanding, not pattern-matching)._
+_Guardrail: raise to Sonnet minimum if the docs change describes **concurrency, migrations, auth, cryptography, parser edge cases, filesystem race conditions** (accurate prose in these domains requires real understanding, not pattern-matching)._

@@ -1,8 +1,8 @@
 # Spec Template — bugfix
 
-Copy this template into `${CLAUDE_PROJECT_DIR}/.claude/teams/<team-name>/spec.md` and fill in each section. Delete template-only guidance in italics before finalizing. **Every section is required**.
+Copy this template into `${CLAUDE_PROJECT_DIR}/.claude/teams/<team-name>/spec.md` and fill in each section. Delete template-only guidance in italics before finalizing. Fill every section with concrete content.
 
-A bugfix spec must name the bug precisely and define the fix by the behaviour that proves it. Root-cause first; workarounds need explicit justification.
+A bugfix spec names the bug precisely and defines the fix by the behaviour that proves it. Root-cause first; workarounds need explicit justification.
 
 ---
 
@@ -26,7 +26,7 @@ A bugfix spec must name the bug precisely and define the fix by the behaviour th
 **Out of scope:**
 - _Adjacent bugs you notice — file separately, do not bundle_
 - _Refactoring around the fix — out unless necessary to land the fix correctly_
-- _Dev may NOT add unrelated tests_
+- _Dev adds only the regression test named in scope; unrelated tests go in a separate issue_
 
 **Constraints:**
 - _Fix must be minimal — target the root cause, not symptoms_
@@ -38,11 +38,15 @@ A bugfix spec must name the bug precisely and define the fix by the behaviour th
 - [ ] _Full suite passes including the new regression test_
 - [ ] _`npm run check` passes (or project equivalent)_
 
-**Model hint:** `sonnet` — _bugfixes almost always need real reasoning about the root cause._
+**Model hint:** `sonnet[high]` — _bugfixes almost always need real reasoning about the root cause._
 
-_Model hint options:_
+_Syntax: `<tier>[<effort>]` — tier is `haiku | sonnet | opus`; optional bracket is effort `low | medium | high | xhigh | max`. Examples: `sonnet`, `sonnet[high]`, `opus[xhigh]`._
+
+_Tier options:_
 - _`haiku` — rare; only for trivially scoped, well-understood bugs with single-file impact_
 - _`sonnet` — default; bug diagnosis + fix + regression test_
 - _`opus` — deep architectural bug, fix requires judgment about API / invariants_
 
-_Guardrail: force Sonnet minimum if the bug touches **concurrency, migrations, auth, cryptography, parser edge cases, filesystem race conditions** — these domains punish subtle fixes._
+_For bugfixes, `[high]` or `[xhigh]` is usually the right effort — root-cause reasoning benefits from extra thinking._
+
+_Guardrail: raise to Sonnet minimum if the bug touches **concurrency, migrations, auth, cryptography, parser edge cases, filesystem race conditions** — these domains punish subtle fixes._
