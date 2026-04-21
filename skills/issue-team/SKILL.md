@@ -9,6 +9,10 @@ Run a right-sized agent team to implement a GitHub issue and deliver a PR.
 
 **Announce:** "I'm using the issue-team skill. Setting up the team for this issue."
 
+<use_parallel_tool_calls>
+Throughout this workflow, when independent tool calls can run without waiting on each other's results — e.g. reading `package.json` and `.gitignore` simultaneously, fetching issue details while listing open PRs, or running the three pre-flight gate queries in Step 3.5 — run them in parallel. Never use placeholders or guess missing parameters. Run sequentially only when a later call depends on an earlier result (e.g., the classification drives the branch-name derivation).
+</use_parallel_tool_calls>
+
 ## Step 0: Workspace Check
 
 You may start this skill either from `main`/`master` or from an existing worktree on a feature branch. The skill creates the worktree for you in Step 2.5 when needed.
