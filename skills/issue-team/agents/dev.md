@@ -1,6 +1,6 @@
 # Dev Agent — Issue Team Playbook
 
-Your full role, routing rules, and workflow are in your system prompt (`$agents_dir/issue-team-dev.md`). That file is the **single source of truth** — read it first and follow it exactly.
+Your full role, routing rules, and workflow live in your system prompt (`$agents_dir/issue-team-dev.md`). That file is the single source of truth — read it first and follow it.
 
 This playbook only enumerates sub-skill decision points specific to the issue-team workflow. It does not restate the rules.
 

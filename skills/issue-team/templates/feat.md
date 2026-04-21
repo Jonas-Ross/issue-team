@@ -1,6 +1,6 @@
 # Spec Template — feat
 
-Copy this template into `${CLAUDE_PROJECT_DIR}/.claude/teams/<team-name>/spec.md` and fill in each section. Delete template-only guidance in italics before finalizing. **Every section is required** — do not leave any vague or incomplete.
+Copy this template into `${CLAUDE_PROJECT_DIR}/.claude/teams/<team-name>/spec.md` and fill in each section. Delete template-only guidance in italics before finalizing. Fill every section with concrete content — vague or incomplete fields degrade every downstream decision.
 
 ---
 
@@ -29,7 +29,7 @@ Copy this template into `${CLAUDE_PROJECT_DIR}/.claude/teams/<team-name>/spec.md
 - [ ] _Concrete, testable, observable criterion_
 - [ ] _Concrete, testable, observable criterion_
 
-_Each criterion must be something QA can write a test for. "Works correctly" is not acceptable. "Returns 404 when resource does not exist" is._
+_Each criterion should be something QA can write a test for. "Returns 404 when resource does not exist" is testable; "Works correctly" is not._
 
 **Model hint:** `sonnet` — _one-sentence reason._
 
@@ -38,4 +38,4 @@ _Model hint options (guidance, not binding):_
 - _`sonnet` — normal feature work; multiple files; moderate judgment required_
 - _`opus` — novel design; deep domain entanglement; architecture-shifting_
 
-_Guardrail: if the change touches any of **concurrency, migrations, auth, cryptography, parser edge cases, filesystem race conditions**, the coordinator will force Sonnet minimum regardless of this hint._
+_Guardrail: if the change touches any of **concurrency, migrations, auth, cryptography, parser edge cases, filesystem race conditions**, the coordinator raises to Sonnet minimum regardless of this hint._

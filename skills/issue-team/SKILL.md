@@ -138,7 +138,7 @@ elif [ -f go.mod ]; then go test ./...
 fi
 ```
 
-If it fails: report and ask the user whether to proceed or investigate. Do NOT spawn the team over a broken baseline.
+If it fails: report and ask the user whether to proceed or investigate. Hold off on spawning the team while the baseline is broken — a red baseline poisons every downstream signal.
 
 ## Step 3.5: Pre-Flight Gates
 
@@ -278,7 +278,7 @@ SendMessage to: "pm"
 
 **`refactor` or `bugfix` classification — YOU (coordinator) write the spec.**
 
-Load the class template per the lookup order above and copy its fields into `${CLAUDE_PROJECT_DIR}/.claude/teams/issue-<number>/spec.md`. Fill every section. Every spec produced by this flow MUST include a `Model hint:` line — used in Step 5 to pick the dev/QA model tier.
+Load the class template per the lookup order above and copy its fields into `${CLAUDE_PROJECT_DIR}/.claude/teams/issue-<number>/spec.md`. Fill every section. Every spec produced by this flow needs a `Model hint:` line — used in Step 5 to pick the dev/QA model tier.
 
 At minimum a spec contains:
 - **Goal** — one sentence
@@ -302,7 +302,7 @@ For refactor/bugfix/chore/docs: skip — you authored the spec.
 
 Read the `Model hint:` line from the approved spec. Default tier = the hint value (`haiku`, `sonnet`, or `opus`).
 
-**Guardrail — force Sonnet minimum if the spec touches any of:**
+**Guardrail — raise to Sonnet minimum if the spec touches any of:**
 
 - concurrency (threads, async race windows, locks, channels)
 - migrations (schema changes, data backfills, irreversible transformations)
@@ -481,7 +481,7 @@ Once the PR review gate approves:
 3. Send dev the un-draft authorization: *"PR review approved. Un-draft PR #<number> via `gh pr ready <number>`, then mark the un-draft task complete."*
 4. Dev un-drafts once and completes the task. If the hook blocks, the reviewer hasn't emitted `review_approved` — investigate before overriding.
 
-**Only coordinator authorizes un-drafting.** If PM, QA, or code-reviewer suggests un-drafting to dev, correct them. Draft state is the review gate; one linear flip to non-draft.
+Only the coordinator authorizes un-drafting. If PM, QA, or code-reviewer suggests un-drafting to dev, correct them. Draft state is the review gate; one linear flip to non-draft.
 
 ### General
 
@@ -493,7 +493,7 @@ Once the PR review gate approves:
 
 ## Step 8: Shutdown
 
-When dev confirms the PR is un-drafted and linked to the issue, send `shutdown_request` to **only the agents you actually spawned** — don't address agents that aren't in the team (refactor/bugfix teams have no PM or code-reviewer):
+When dev confirms the PR is un-drafted and linked to the issue, send `shutdown_request` to the agents you actually spawned — address only those present on the team (refactor/bugfix teams have no PM or code-reviewer):
 
 ```
 SendMessage to: "dev"           message: {type: "shutdown_request", reason: "PR open and linked — work complete"}

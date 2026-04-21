@@ -1,6 +1,6 @@
 # Spec Template — docs
 
-Copy this template into `${CLAUDE_PROJECT_DIR}/.claude/teams/<team-name>/spec.md` and fill in each section. Delete template-only guidance in italics before finalizing. **Every section is required**.
+Copy this template into `${CLAUDE_PROJECT_DIR}/.claude/teams/<team-name>/spec.md` and fill in each section. Delete template-only guidance in italics before finalizing. Fill every section with concrete content.
 
 Docs changes modify documentation only. Acceptance tests for docs are typically an editorial review rather than a unit test — spell that out explicitly if so.
 
@@ -37,4 +37,4 @@ _Model hint options:_
 - _`sonnet` — docs that require synthesizing behaviour across multiple modules; design-decision docs; architecture narratives_
 - _`opus` — rare_
 
-_Guardrail: force Sonnet minimum if the docs change describes **concurrency, migrations, auth, cryptography, parser edge cases, filesystem race conditions** (accurate prose in these domains requires real understanding, not pattern-matching)._
+_Guardrail: raise to Sonnet minimum if the docs change describes **concurrency, migrations, auth, cryptography, parser edge cases, filesystem race conditions** (accurate prose in these domains requires real understanding, not pattern-matching)._
