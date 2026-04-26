@@ -1,7 +1,7 @@
 {
   "name": "issue-team",
-  "description": "Claude Code skill that runs a right-sized agent team to implement a GitHub issue and deliver a PR — coordinator + PM + dev + QA + code-reviewer with explicit review checkpoints",
-  "version": "0.2.0",
+  "description": "Claude Code plugin that drives a GitHub issue from triage to merged PR. Ships two skills sharing the same git flow: /issue-team (persistent agent team via TeamCreate + SendMessage) and /issue-subagents (one-shot sub-agents via the Agent tool, no experimental flag required).",
+  "version": "0.3.0",
   "author": {
     "name": "Jonas Ross",
     "email": "jonasrossaa@gmail.com"
