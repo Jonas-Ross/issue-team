@@ -1,7 +1,7 @@
 {
   "name": "issue-team",
   "description": "Claude Code plugin that drives a GitHub issue from triage to merged PR. Ships two skills sharing the same git flow: /issue-team (persistent agent team via TeamCreate + SendMessage) and /issue-subagents (one-shot sub-agents via the Agent tool, no experimental flag required).",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": {
     "name": "Jonas Ross",
     "email": "jonasrossaa@gmail.com"

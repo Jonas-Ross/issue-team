@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1
+
+- Harden `/issue-subagents` orchestration: plugin-aware skill discovery, unconditional base-branch computation, clean-worktree gating, issue-numbered worktree names, and persisted issue context before pre-flight gates.
+- Add a low-risk fast path for docs, simple chores, and tightly scoped bugfix/refactor work where the orchestrator can define concrete manual acceptance checks without spawning QA test-author.
+- Centralize draft PR creation in the orchestrator so Dev only implements, verifies, and pushes; the orchestrator owns PR body metadata and `Closes #<issue_number>`.
+- Improve acceptance verification across review paths: QA and code-reviewer receive test/manual-check context, feature review verifies acceptance criteria, and manual-only checks use `test_command: none`.
+- Tighten review-loop handling for malformed reviewer replies, low/medium-confidence findings, diff-triggered sub-gates, and zsh-safe plugin-cache lookup.
+
 ## 0.3.0
 
 - Add `/issue-subagents` skill — sub-agent variant of `/issue-team` that uses one-shot sub-agents (via the `Agent` tool) instead of a long-lived agent team. Same git flow (worktree → spec → acceptance tests → implementation → draft PR → review → un-draft → retro), classification rules, model-tier guardrails, diff-triggered sub-gates, and spec templates as `/issue-team`. Differences: orchestrator drives every step (no peer messaging), spec lives at `${CLAUDE_PROJECT_DIR}/.claude/issue-runs/issue-<n>/spec.md` (gitignored), no `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` flag required, no completion-gate hook (orchestrator runs `gh pr ready` itself after review).

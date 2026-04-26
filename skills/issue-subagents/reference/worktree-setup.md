@@ -19,7 +19,7 @@ If `$base` is `.worktrees` or `worktrees` (project-local, outside `.claude/`), v
 
 ## Derive branch name and worktree path
 
-Map the issue title's conventional-commit prefix to a branch prefix, then slugify the rest.
+Map the issue title's conventional-commit prefix to a branch prefix, then slugify the rest. Include the issue number so similarly-titled issues and reruns do not silently collide.
 
 | Title prefix | Branch prefix |
 |---|---|
@@ -41,13 +41,18 @@ slug=$(printf '%s' "$title" \
   | sed 's/^[^:]*: *//' \
   | tr '[:upper:]' '[:lower:]' \
   | sed 's/[^a-z0-9]/-/g; s/--*/-/g; s/^-//; s/-$//')
-branch="$bp/$slug"
-wt_path="$base/$bp+$slug"
+branch="$bp/issue-$issue_number-$slug"
+wt_path="$base/$bp+issue-$issue_number-$slug"
 ```
 
 ## Create and enter the worktree
 
 ```bash
+if git show-ref --verify --quiet "refs/heads/$branch" || [ -e "$wt_path" ]; then
+  echo "Branch or worktree already exists for issue #$issue_number: $branch / $wt_path"
+  echo "Stop and ask the user whether to reuse it, delete it, or pick a different branch name."
+  exit 1
+fi
 git worktree add "$wt_path" -b "$branch"
 ```
 
