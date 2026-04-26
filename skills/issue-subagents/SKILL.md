@@ -28,7 +28,7 @@ The git flow, classification rules, model-tier guardrails, sub-gates, and retros
 
 ## Soft dependencies
 
-Sub-agents may invoke optional `superpowers:*` skills if installed: `test-driven-development`, `verification-before-completion`, `writing-good-pr-descriptions`, `code-review-checklist`. None are required — sub-agent returns will include `sub-skill missing: <name>` notes when one is unavailable, and the workflow proceeds.
+Sub-agents may invoke optional `superpowers:*` skills if installed: `test-driven-development`, `verification-before-completion`, `code-review-checklist`. The orchestrator may invoke `superpowers:writing-good-pr-descriptions` before creating the draft PR. None are required — returns will include `sub-skill missing: <name>` notes when one is unavailable, and the workflow proceeds.
 
 ## Step 0: Workspace Check
 
@@ -44,11 +44,25 @@ current_branch=$(git branch --show-current)
 
 ## Step 0a: Resolve Skill Location
 
-The skill can run from either project `.claude/skills/` or user-global `~/.claude/skills/`. Resolve once:
+The skill can run from project `.claude/skills/`, user-global `~/.claude/skills/`, this plugin's source checkout, or an installed plugin cache. Resolve once:
 
 ```bash
-skill_dir=$(ls -d "${CLAUDE_PROJECT_DIR}/.claude/skills/issue-subagents" "$HOME/.claude/skills/issue-subagents" 2>/dev/null | head -1)
-[ -z "$skill_dir" ] && { echo "issue-subagents skill not found in either ${CLAUDE_PROJECT_DIR}/.claude/skills/ or ~/.claude/skills/"; exit 1; }
+skill_dir=$(
+  find \
+    "${CLAUDE_PROJECT_DIR}/.claude/skills" \
+    "$HOME/.claude/skills" \
+    "$(pwd)/skills" \
+    "$HOME/.claude/plugins/cache" \
+    -path '*/issue-subagents/SKILL.md' -print 2>/dev/null \
+  | sed 's#/SKILL.md$##' \
+  | head -1
+)
+if [ -z "$skill_dir" ]; then
+  for d in "${CLAUDE_PROJECT_DIR}/.claude/skills/issue-subagents" "$HOME/.claude/skills/issue-subagents" "$(pwd)/skills/issue-subagents"; do
+    [ -d "$d" ] && { skill_dir="$d"; break; }
+  done
+fi
+[ -z "$skill_dir" ] && { echo "issue-subagents skill not found in project skills, user skills, source checkout, or plugin cache"; exit 1; }
 ```
 
 `skill_dir` is the orchestrator's own variable, used to read `reference/*.md` and `templates/*.md`. The PM spawn forwards it to PM as a `Templates dir:` field; the other three sub-agent types (`issue-subagents-{dev,qa,code-reviewer}`) carry their playbooks as system prompts and don't need it.
@@ -59,10 +73,10 @@ skill_dir=$(ls -d "${CLAUDE_PROJECT_DIR}/.claude/skills/issue-subagents" "$HOME/
 gh issue list --state open --limit 30
 ```
 
-Display the list. Ask the user which issue number to implement. Save it as `issue_number`. Then fetch the title (full body and comments are persisted to disk in Step 3.6, after the worktree exists):
+Display the list. Ask the user which issue number to implement. Save it as `issue_number`. Then fetch the title (full body and comments are persisted to disk in Step 3.4 after the worktree exists):
 
 ```bash
-gh issue view <issue_number> --json title --jq .title
+title=$(gh issue view <issue_number> --json title --jq .title)
 ```
 
 Save the title as `title`.
@@ -81,7 +95,22 @@ Five class strings, each driving template selection and branch prefix. Roster (P
 
 The class string matches the template file stem in `templates/<class>.md`. If the prefix is missing or ambiguous, ask the user which class applies.
 
-Save the class string — it is passed verbatim to every sub-agent except code-reviewer (feature-only, no `Classification:` line needed).
+Save the class string — it is passed verbatim to every sub-agent except code-reviewer (`feat` class only, no `Classification:` line needed).
+
+## Step 2.1: Compute Base Branch
+
+Compute the base branch that all diffs should compare against. This step runs for both newly-created worktrees and existing feature branches:
+
+```bash
+default_branch_name=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null || printf '%s\n' main)
+if git show-ref --verify --quiet "refs/heads/$default_branch_name"; then
+  base_branch="$default_branch_name"
+else
+  base_branch="origin/$default_branch_name"
+fi
+```
+
+Save `base_branch` and substitute it into every later spawn prompt.
 
 ## Step 2.5: Set Up Worktree (skip if `needs_worktree=false`)
 
@@ -102,17 +131,21 @@ fi
 
 If it fails: report and ask the user whether to proceed or investigate. A red baseline poisons every downstream signal.
 
-## Step 3.5: Pre-Flight Gates
+Also confirm the working tree is clean before any sub-agent commits:
 
-Run the three cheap gates from `$skill_dir/reference/preflight-gates.md` (acceptance criteria present, no conflicting open PRs, referenced dependencies resolved). None auto-aborts — each surfaces a question to the user when it fires, and proceeds on approval. **If none of A/B/C trigger, do not announce — proceed silently to Step 3.6.**
+```bash
+git status --porcelain
+```
 
-## Step 3.6: Run-State Directory and `.gitignore`
+If any output appears, stop and ask the user whether those changes belong to this run, should be committed separately, or should be left untouched. Do not spawn sub-agents into a dirty worktree.
+
+## Step 3.4: Run-State Directory and `.gitignore`
 
 Persist the issue body and comments inside the worktree, and add the run-state directory to `.gitignore` on the feature branch. This step runs unconditionally — it covers both the freshly-created-worktree case and the started-in-an-existing-worktree case. All paths are relative to the current working directory (the worktree).
 
 ```bash
 mkdir -p .claude/issue-runs/issue-<issue_number>
-gh issue view <issue_number> --json body --jq .body > .claude/issue-runs/issue-<issue_number>/body.md
+gh issue view <issue_number> --json body --jq '.body // ""' > .claude/issue-runs/issue-<issue_number>/body.md
 gh issue view <issue_number> --json comments > .claude/issue-runs/issue-<issue_number>/comments.json
 
 if ! grep -qxF '.claude/issue-runs/' .gitignore 2>/dev/null; then
@@ -130,6 +163,10 @@ worktree_abs=$(pwd)
 ```
 
 Use `$worktree_abs` (substituted to the literal path string) wherever spawn prompts reference run-state files.
+
+## Step 3.5: Pre-Flight Gates
+
+Run the three cheap gates from `$skill_dir/reference/preflight-gates.md` (acceptance criteria present, no conflicting open PRs, referenced dependencies resolved). Read from the persisted run-state files: `<worktree_abs>/.claude/issue-runs/issue-<issue_number>/body.md` and `comments.json`. None auto-aborts — each surfaces a question to the user when it fires, and proceeds on approval. **If none of A/B/C trigger, do not announce — proceed silently to Step 4.**
 
 ## Step 4: Write / Approve the Spec
 
@@ -175,10 +212,11 @@ Load the class template per the lookup order above and copy its fields into the 
 
 ## Step 5: Pick Model Tier and Effort from Spec's Model Hint
 
-Read the `Model hint:` line from the approved spec. Hint syntax:
+Read the `Model hint:` line from the approved spec. Accept both plain and Markdown-labeled forms:
 
 ```
 Model hint: <tier>[<effort>] — <reason>
+**Model hint:** `<tier>[<effort>]` — <reason>
 ```
 
 `<tier>` is `haiku | sonnet | opus`. The bracket `[<effort>]` (`low | medium | high | xhigh | max`) is optional. Examples:
@@ -187,11 +225,32 @@ Model hint: <tier>[<effort>] — <reason>
 - `Model hint: sonnet[high] — auth flow, needs careful reasoning`
 - `Model hint: opus[xhigh] — novel design, long horizon`
 
-The **tier** maps to the `model:` field on Agent spawns. The **effort** is not a parameter on the Agent tool — instead, when the spec specifies an effort bracket, include a `Reasoning effort target: <value>` line in the prompt body of every dev and QA spawn (test-author, review, fix-loop). Sub-agents read the line and self-apply.
+The **tier** maps to the `model:` field on Agent spawns. The **effort** is not a parameter on the Agent tool — instead, when the spec specifies an effort bracket, include a `Reasoning effort target: <value>` line in the prompt body of every dev and QA spawn (test-author, review, fix-loop). Sub-agents read the line and use it as a local reasoning-depth target.
 
 **Guardrail:** raise to Sonnet minimum if the spec touches concurrency, migrations, auth, cryptography, parser edge cases, or filesystem race conditions — see `$skill_dir/reference/model-guardrails.md`. If the hint is `haiku` and any of these apply, upgrade to `sonnet` and note the override. `sonnet`/`opus` hints are not downgraded.
 
 Record the tier decision (hint, final value, override reason if any) — surfaces in the Step 10 retro.
+
+## Step 5.5: Decide Test-Author Path
+
+Use a lightweight fast path only when the issue is small and low risk:
+
+- Eligible by default: `docs` and simple `chore`
+- Eligible by judgment: tightly scoped `bugfix` or `refactor` with clear acceptance criteria, no model guardrail domains, and no likely Step 8a sub-gates
+- Not eligible: any `feat`, unclear scope, broad refactor, risky domain, missing acceptance criteria, or user request for full QA test authoring
+
+If eligible, set `fast_path=true` and write the acceptance bundle yourself from the approved spec:
+
+```
+test_paths:
+test_command: none
+manual_checks:
+- <one concrete check per acceptance criterion>
+```
+
+The checklist must be specific enough that Dev and the final reviewer can perform it without rereading your intent. Save `test_paths`, `test_command`, and `manual_checks`, then skip Step 6 and proceed to Step 7.
+
+If not eligible, set `fast_path=false` and proceed to Step 6.
 
 ## Step 6: Spawn QA — Write Acceptance Tests
 
@@ -209,15 +268,16 @@ Agent
     Spec path: <worktree_abs>/.claude/issue-runs/issue-<issue_number>/spec.md
     Reasoning effort target: <effort>   # only include if Step 5 produced an effort bracket
 
-    Read the spec, write acceptance tests covering every criterion, commit them,
-    and return the test_paths block per your playbook Step 3.
+    Read the spec, write or document acceptance checks covering every criterion,
+    commit any files you create, and return the acceptance block per your playbook
+    Step 3.
 ```
 
-When the sub-agent returns: read the test file(s) listed in `test_paths:` and verify coverage of every acceptance criterion. If satisfied, proceed to Step 7. If gaps exist, re-spawn QA with specific feedback. Loop until approved.
+When the sub-agent returns: read any file(s) listed in `test_paths:` and verify coverage of every acceptance criterion. For any `manual_checks:`, verify the checklist is concrete and covers every criterion. If satisfied, proceed to Step 7. If gaps exist, re-spawn QA with specific feedback. Loop until approved.
 
-Save the returned `test_paths:` (newline-delimited) and `test_command:` — Dev needs both.
+Save the returned `test_paths:` (newline-delimited, may be empty), `test_command:`, and any `manual_checks:` — Dev and reviewers need them.
 
-## Step 7: Spawn Dev — Implement and Open Draft PR
+## Step 7: Spawn Dev — Implement and Push
 
 ```
 Agent
@@ -233,17 +293,43 @@ Agent
     Base branch: <base_branch>
     Spec path: <worktree_abs>/.claude/issue-runs/issue-<issue_number>/spec.md
     Acceptance test paths (newline-delimited):
-    <test_paths from Step 6>
-    Test command: <test_command from Step 6>
+    <test_paths from Step 6 or Step 5.5>
+    Test command: <test_command from Step 6 or Step 5.5>
+    Manual checks:
+    <manual_checks from Step 6 or Step 5.5, if any>
     Reasoning effort target: <effort>   # only include if Step 5 produced an effort bracket
 
-    Implement against the acceptance tests using TDD per your playbook. Open the
-    draft PR (substitute the actual issue number into "Closes #<issue_number>" — do NOT
-    leave a literal placeholder). Return the PR URL, PR number, tasks completed, and
-    any non-obvious decisions.
+    Implement against the acceptance tests/manual checks using TDD per your playbook
+    where applicable. Push the branch, but do not create the PR. Return the branch
+    name, tasks completed, verification run, and any non-obvious decisions.
 ```
 
-When the sub-agent returns: save the `PR URL` and `PR number`. Proceed to Step 8.
+When the sub-agent returns: save the branch name and implementation summary. Proceed to Step 7.5.
+
+## Step 7.5: Orchestrator Creates Draft PR
+
+Create the draft PR yourself so issue linking, title, and metadata stay centralized:
+
+Before drafting the PR body, invoke `superpowers:writing-good-pr-descriptions` if available. If not present, proceed silently and record `sub-skill missing: superpowers:writing-good-pr-descriptions` in your run notes.
+
+```bash
+branch_name=$(git branch --show-current)
+gh pr create --draft \
+  --title "<title>" \
+  --body "$(cat <<'EOF'
+## Summary
+- <implementation summary from Dev>
+
+## Test coverage
+- Test command: <test_command from Step 6 or Step 5.5>
+- Manual checks: <manual_checks summary, or none>
+
+Closes #<issue_number>
+EOF
+)"
+```
+
+Substitute the actual title, issue number, test command, manual checks, and Dev summary before running. Save the returned `PR URL` and `PR number`. Proceed to Step 8.
 
 ## Step 8: PR Review (single gate, classification-aware)
 
@@ -253,7 +339,7 @@ Scan the diff:
 
 ```bash
 gh pr diff <pr_number> --name-only
-gh pr diff <pr_number>    # full diff if a sub-gate fires
+gh pr diff <pr_number>    # full diff; required for dependency-entry detection and for any fired sub-gate
 ```
 
 For each pattern below, do the extra scrutiny named on the right. Run the sub-gate synchronously yourself (do not spawn a sub-agent for this). A sub-gate that finds a real concern blocks un-drafting — re-spawn dev with the findings before proceeding.
@@ -283,12 +369,18 @@ Agent
     Worktree: <worktree_abs>
     Base branch: <base_branch>
     Spec path: <worktree_abs>/.claude/issue-runs/issue-<issue_number>/spec.md
+    Acceptance test paths (newline-delimited):
+    <test_paths from Step 6 or Step 5.5>
+    Test command: <test_command from Step 6 or Step 5.5>
     PR number: <pr_number>
     PR URL: <pr_url>
+    Manual checks:
+    <manual_checks from Step 6 or Step 5.5, if any>
 
-    Per your playbook Steps 4–5: run the full check, review the diff against the
-    spec, smoke-test the changed code, and return the verdict block (approved or
-    changes_requested with file:line + what's wrong + what it should do instead).
+    Per your playbook Steps 4–5: run the full check, verify acceptance using the
+    tests/manual checks above, review the diff against the spec, smoke-test the
+    changed code, and return the verdict block (approved or changes_requested
+    with file:line + what's wrong + what it should do instead).
 ```
 
 **Class is `feat`:** spawn the code-reviewer.
@@ -303,12 +395,18 @@ Agent
     Worktree: <worktree_abs>
     Base branch: <base_branch>
     Spec path: <worktree_abs>/.claude/issue-runs/issue-<issue_number>/spec.md
+    Acceptance test paths (newline-delimited):
+    <test_paths from Step 6 or Step 5.5>
+    Test command: <test_command from Step 6 or Step 5.5>
     PR number: <pr_number>
     PR URL: <pr_url>
+    Manual checks:
+    <manual_checks from Step 6 or Step 5.5, if any>
 
-    Per your playbook: read the spec, fetch the diff, review against the four
-    categories (security, correctness, conventions, scope), tag every finding with
-    [severity][confidence], and return the verdict block.
+    Per your playbook: run the full check, verify the acceptance criteria using
+    the tests/manual checks above, read the spec, fetch the diff, review against
+    the four categories (security, correctness, conventions, scope), tag every
+    finding with [severity][confidence], and return the verdict block.
 ```
 
 ### 8c. Consume the verdict
@@ -340,10 +438,10 @@ issues:                    # only on changes_requested
 
 Handle each verdict type:
 
-- **`approved` with minors/nits attached (code-reviewer)** → proceed to Step 9 (un-draft). Forward findings to the user as non-blocking suggestions; the user decides whether to address inline or file follow-up issues.
+- **`approved` with low/medium-confidence majors, minors, or nits attached (code-reviewer)** → proceed to Step 9 (un-draft). Forward findings to the user as non-blocking suggestions; the user decides whether to address inline or file follow-up issues.
 - **`approved` with nothing attached** → proceed to Step 9 immediately.
 - **`changes_requested`** → proceed to Step 8d.
-- **Malformed reply** (no schema match) → take the first word of the message as the verdict (`approved` / `changes_requested`); ignore finding tags. Record `sub-gate note: reviewer reply did not match schema` for the retro.
+- **Malformed reply** (no schema match) → re-spawn the reviewer once with "Return only the required verdict schema." If the second reply is still malformed, block un-drafting and ask the user whether to proceed manually. Record `sub-gate note: reviewer reply did not match schema` for the retro.
 
 Record the finding counts for the Step 10 retro.
 
@@ -373,8 +471,10 @@ Agent
     Base branch: <base_branch>
     Spec path: <worktree_abs>/.claude/issue-runs/issue-<issue_number>/spec.md
     Acceptance test paths (newline-delimited):
-    <test_paths from Step 6>
-    Test command: <test_command from Step 6>
+    <test_paths from Step 6 or Step 5.5>
+    Test command: <test_command from Step 6 or Step 5.5>
+    Manual checks:
+    <manual_checks from Step 6 or Step 5.5, if any>
     PR number: <pr_number>
     Reasoning effort target: <effort>   # only include if Step 5 produced an effort bracket
 

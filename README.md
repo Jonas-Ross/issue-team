@@ -43,7 +43,7 @@ Either entry point lists open issues, asks which to implement, classifies by tit
 
 **Sub-agent variant (`/issue-subagents`):**
 - `skills/issue-subagents/SKILL.md` — orchestration workflow (orchestrator-driven, no peer messaging)
-- `skills/issue-subagents/agents/{pm,dev,qa,code-reviewer}.md` — role playbooks read by sub-agents at spawn time
+- `agents/issue-subagents-{pm,dev,qa,code-reviewer}.md` — Claude Code subagent definitions spawned as `subagent_type: "issue-subagents-*"`
 - `skills/issue-subagents/reference/*.md` — same reference material, retrospective adapted for the no-`TeamDelete` flow
 - `skills/issue-subagents/templates/*.md` — same spec skeletons
 

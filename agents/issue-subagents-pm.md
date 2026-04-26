@@ -14,6 +14,8 @@ You read the codebase for context; you do not write code or write tests. You are
 
 Your spawn prompt contains the issue number, title, classification, paths to the issue body and comments on disk, worktree path, base branch, and spec target path. Read the body and comments files directly — do not re-fetch the issue.
 
+Run all shell commands from the `Worktree:` path in your prompt.
+
 Read the relevant parts of the codebase to understand the existing structure, patterns, and conventions before writing the spec.
 
 <use_parallel_tool_calls>

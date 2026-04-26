@@ -17,7 +17,9 @@ When you find a bug during review, report it in your return. Dev modifies implem
 
 ## Step 1: Read Your Kickoff Context
 
-Your spawn prompt contains the issue number, classification, worktree path, base branch, spec path, and a `Mode:` line — `test-author` or `review`. Read the spec file directly — do not ask for a paste.
+Your spawn prompt contains the issue number, classification, worktree path, base branch, spec path, and a `Mode:` line — `test-author` or `review`. In review mode it may also contain acceptance test paths, a test command, and manual checks. It may contain `Reasoning effort target:`; when present, use the effort value as your local reasoning-depth target (`low` = stay narrow, `medium` = standard care, `high`/`xhigh`/`max` = inspect adjacent edge cases and failure modes before returning). Read the spec file directly — do not ask for a paste.
+
+Run all shell commands from the `Worktree:` path in your prompt.
 
 If `Mode: test-author` and any acceptance criterion is genuinely ambiguous for test-writing, return early with a `clarification needed:` block instead of writing tests. The orchestrator will resolve and re-spawn you. (In `Mode: review`, this escape-hatch does not apply — you are reviewing implemented code, not writing tests.)
 
@@ -25,7 +27,7 @@ If `Mode: test-author` and any acceptance criterion is genuinely ambiguous for t
 
 Before writing the first acceptance test, invoke `superpowers:test-driven-development` if available. If not present, proceed silently and note `sub-skill missing: superpowers:test-driven-development` in your return.
 
-Write tests covering **every acceptance criterion** — none skipped or weakened. Follow the repo's existing test conventions exactly.
+Write tests covering **every acceptance criterion** — none skipped or weakened. Follow the repo's existing test conventions exactly. For docs/chore criteria that are not meaningfully automatable, write a concrete `manual_checks:` checklist instead of inventing hollow tests.
 
 **Find where tests live:**
 ```bash
@@ -41,7 +43,12 @@ If multiple test patterns coexist, follow the one closest to the file under test
 - Each test name must describe the expected behaviour: `"returns 404 when resource does not exist"` not `"test error case"`
 - Tests must be runnable immediately — no stubs, no TODOs, no placeholder assertions
 
-Commit the tests:
+Run the acceptance command and confirm the result before committing:
+
+- For code-facing acceptance tests, the tests should fail for the expected reason before Dev implements.
+- For docs/manual checks, run the strongest available static check (`npm run check`, link checker, formatter, or project equivalent) if one exists.
+
+Commit the test files only when you created or changed files:
 ```bash
 git add <test files>
 git commit -m "test: acceptance tests for issue #<issue_number>"
@@ -58,8 +65,10 @@ mode: test-author
 test_paths:
 <absolute path to test file 1>
 <absolute path to test file 2>
-test_command: <exact command to run these tests for this project>
-status: tests fail as expected (no implementation yet)
+test_command: <exact command to run these tests for this project, or "none" if no automated acceptance test exists>
+manual_checks:
+- <manual check, or "none">
+status: tests fail as expected (no implementation yet) | manual checks defined | static checks pass
 notes:
 - <any spec gap you noticed and worked around>
 - <any sub-skill missing: ... entries>
@@ -94,6 +103,8 @@ Check every changed line:
 - Does the implementation satisfy each acceptance criterion?
 - Is anything from the spec missing?
 - Is anything implemented that is explicitly out-of-scope per the spec?
+- If `Test command:` is not `none`, run it and include the result in `verified:` or `issues:`.
+- If the prompt includes `Manual checks:`, perform each check and include the result in `verified:` or `issues:`.
 
 ### 4c. Smoke test
 
